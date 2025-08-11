@@ -31,18 +31,21 @@
     const ctx = canvas.getContext('2d');
     const startBtn = document.getElementById('startBtn');
 
+    let osc, gainNode;
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
     // Liste de types d'ondes pour générer un son aléatoire
     const waveTypes = ['sine', 'square', 'triangle', 'sawtooth'];
     const randomWave = waveTypes[Math.floor(Math.random() * waveTypes.length)];
 
-    const osc = audioCtx.createOscillator();
-    osc.type = randomWave;
-    const gainNode = audioCtx.createGain();
-    osc.connect(gainNode).connect(audioCtx.destination);
-    gainNode.gain.value = 0.1;
-    osc.start();
+    function initSound() {
+      osc = audioCtx.createOscillator();
+      osc.type = randomWave;
+      gainNode = audioCtx.createGain();
+      gainNode.gain.value = 0.1;
+      osc.connect(gainNode).connect(audioCtx.destination);
+      osc.start();
+    }
 
     function computeOpenness(lm){
       const top = lm[13];
@@ -60,7 +63,7 @@
       const lm = results.multiFaceLandmarks[0];
       const openness = computeOpenness(lm);
       const freq = 120 + (openness * 1000);
-      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      if (osc) osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -81,7 +84,9 @@
 
     startBtn.addEventListener('click', async () => {
       if(audioCtx.state === 'suspended') await audioCtx.resume();
-      await navigator.mediaDevices.getUserMedia({video:true});
+      initSound();
+      const stream = await navigator.mediaDevices.getUserMedia({video:true});
+      video.srcObject = stream;
       camera.start();
       startBtn.disabled = true;
     });
