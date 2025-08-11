@@ -1,3 +1,4 @@
+```html
 <!doctype html>
 <html lang="fr">
 <head>
@@ -5,20 +6,18 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Theremin-Bouche</title>
   <style>
-    body { background:#111; color:white; font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
-    .container { text-align:center; }
+    body { background:#111; color:white; font-family:sans-serif; text-align:center; margin:0; padding:0; }
     video, canvas { position:absolute; top:0; left:0; transform:scaleX(-1); }
     #videoContainer { position:relative; display:inline-block; }
+    h1 { margin-top:20px; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Theremin-Bouche</h1>
-    <p>Ouvre ou ferme ta bouche pour contrôler le son choisi aléatoirement.</p>
-    <div id="videoContainer">
-      <video id="video" autoplay playsinline></video>
-      <canvas id="overlay"></canvas>
-    </div>
+  <h1>Theremin-Bouche</h1>
+  <p>Ouvre/ferme la bouche pour changer la fréquence du son.<br>Appuie sur ESPACE pour amplifier et rendre le son saccadé.</p>
+  <div id="videoContainer">
+    <video id="video" autoplay playsinline></video>
+    <canvas id="overlay"></canvas>
   </div>
   <script type="module">
     import { FaceMesh } from 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js';
@@ -28,7 +27,8 @@
     const canvas = document.getElementById('overlay');
     const ctx = canvas.getContext('2d');
 
-    let osc, gainNode;
+    let osc, gainNode, stutterActive = false, stutterInterval;
+
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const waveTypes = ['sine', 'square', 'triangle', 'sawtooth'];
     const randomWave = waveTypes[Math.floor(Math.random() * waveTypes.length)];
@@ -41,12 +41,13 @@
       gainNode.gain.value = 0.1;
       osc.connect(gainNode).connect(audioCtx.destination);
       osc.start();
+
       const stream = await navigator.mediaDevices.getUserMedia({video:true});
       video.srcObject = stream;
       camera.start();
     }
 
-    function computeOpenness(lm){
+    function computeOpenness(lm) {
       const top = lm[13];
       const bottom = lm[14];
       const leftEye = lm[33];
@@ -63,6 +64,7 @@
       const openness = computeOpenness(lm);
       const freq = 120 + (openness * 1000);
       if (osc) osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -81,7 +83,26 @@
       width:640, height:480
     });
 
-    // Lancer automatiquement à la première interaction clavier/souris
+    // Effet d'amplification + saccadé avec ESPACE
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && !stutterActive) {
+        stutterActive = true;
+        gainNode.gain.value = 0.5; // amplification
+        stutterInterval = setInterval(() => {
+          gainNode.gain.value = gainNode.gain.value > 0 ? 0 : 0.5;
+        }, 100);
+      }
+    });
+
+    document.addEventListener('keyup', (e) => {
+      if (e.code === 'Space') {
+        stutterActive = false;
+        clearInterval(stutterInterval);
+        gainNode.gain.value = 0.1; // retour fluide
+      }
+    });
+
+    // Lancement à la première interaction
     function startOnFirstInteraction(){
       const handler = () => {
         document.removeEventListener('click', handler);
@@ -96,3 +117,4 @@
   </script>
 </body>
 </html>
+```
