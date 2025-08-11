@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Theremin-Bouche</title>
+  <style>
+    body { background:#111; color:white; font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
+    .container { text-align:center; }
+    video, canvas { position:absolute; top:0; left:0; transform:scaleX(-1); }
+    #videoContainer { position:relative; display:inline-block; }
+    button { margin-top:20px; padding:10px 20px; font-size:16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Theremin-Bouche</h1>
+    <p>Ouvre ou ferme ta bouche pour contrôler le son choisi aléatoirement.</p>
+    <div id="videoContainer">
+      <video id="video" autoplay playsinline></video>
+      <canvas id="overlay"></canvas>
+    </div>
+    <button id="startBtn">Démarrer</button>
+  </div>
+  <script type="module">
+    import { FaceMesh } from 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js';
+    import { Camera } from 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';
+
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+    const startBtn = document.getElementById('startBtn');
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Liste de types d'ondes pour générer un son aléatoire
+    const waveTypes = ['sine', 'square', 'triangle', 'sawtooth'];
+    const randomWave = waveTypes[Math.floor(Math.random() * waveTypes.length)];
+
+    const osc = audioCtx.createOscillator();
+    osc.type = randomWave;
+    const gainNode = audioCtx.createGain();
+    osc.connect(gainNode).connect(audioCtx.destination);
+    gainNode.gain.value = 0.1;
+    osc.start();
+
+    function computeOpenness(lm){
+      const top = lm[13];
+      const bottom = lm[14];
+      const leftEye = lm[33];
+      const rightEye = lm[263];
+      const eyeDist = Math.hypot(leftEye.x - rightEye.x, leftEye.y - rightEye.y) + 1e-6;
+      return Math.hypot(top.x - bottom.x, top.y - bottom.y) / eyeDist;
+    }
+
+    const faceMesh = new FaceMesh({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
+    faceMesh.setOptions({ maxNumFaces:1, refineLandmarks:true, minDetectionConfidence:0.6, minTrackingConfidence:0.6 });
+    faceMesh.onResults(results => {
+      if(!results.multiFaceLandmarks.length) return;
+      const lm = results.multiFaceLandmarks[0];
+      const openness = computeOpenness(lm);
+      const freq = 120 + (openness * 1000);
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.strokeStyle = 'lime';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(lm[13].x * canvas.width, lm[13].y * canvas.height);
+      ctx.lineTo(lm[14].x * canvas.width, lm[14].y * canvas.height);
+      ctx.stroke();
+    });
+
+    const camera = new Camera(video, {
+      onFrame: async () => {
+        await faceMesh.send({image: video});
+      },
+      width:640, height:480
+    });
+
+    startBtn.addEventListener('click', async () => {
+      if(audioCtx.state === 'suspended') await audioCtx.resume();
+      await navigator.mediaDevices.getUserMedia({video:true});
+      camera.start();
+      startBtn.disabled = true;
+    });
+  </script>
+</body>
+</html>
