@@ -9,7 +9,6 @@
     .container { text-align:center; }
     video, canvas { position:absolute; top:0; left:0; transform:scaleX(-1); }
     #videoContainer { position:relative; display:inline-block; }
-    button { margin-top:20px; padding:10px 20px; font-size:16px; }
   </style>
 </head>
 <body>
@@ -20,7 +19,6 @@
       <video id="video" autoplay playsinline></video>
       <canvas id="overlay"></canvas>
     </div>
-    <button id="startBtn">Démarrer</button>
   </div>
   <script type="module">
     import { FaceMesh } from 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js';
@@ -29,22 +27,23 @@
     const video = document.getElementById('video');
     const canvas = document.getElementById('overlay');
     const ctx = canvas.getContext('2d');
-    const startBtn = document.getElementById('startBtn');
 
     let osc, gainNode;
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-    // Liste de types d'ondes pour générer un son aléatoire
     const waveTypes = ['sine', 'square', 'triangle', 'sawtooth'];
     const randomWave = waveTypes[Math.floor(Math.random() * waveTypes.length)];
 
-    function initSound() {
+    async function init() {
+      await audioCtx.resume();
       osc = audioCtx.createOscillator();
       osc.type = randomWave;
       gainNode = audioCtx.createGain();
       gainNode.gain.value = 0.1;
       osc.connect(gainNode).connect(audioCtx.destination);
       osc.start();
+      const stream = await navigator.mediaDevices.getUserMedia({video:true});
+      video.srcObject = stream;
+      camera.start();
     }
 
     function computeOpenness(lm){
@@ -82,14 +81,18 @@
       width:640, height:480
     });
 
-    startBtn.addEventListener('click', async () => {
-      if(audioCtx.state === 'suspended') await audioCtx.resume();
-      initSound();
-      const stream = await navigator.mediaDevices.getUserMedia({video:true});
-      video.srcObject = stream;
-      camera.start();
-      startBtn.disabled = true;
-    });
+    // Lancer automatiquement à la première interaction clavier/souris
+    function startOnFirstInteraction(){
+      const handler = () => {
+        document.removeEventListener('click', handler);
+        document.removeEventListener('keydown', handler);
+        init();
+      };
+      document.addEventListener('click', handler);
+      document.addEventListener('keydown', handler);
+    }
+
+    startOnFirstInteraction();
   </script>
 </body>
 </html>
